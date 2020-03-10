@@ -1,21 +1,23 @@
 plugins {
-    id 'java'
-    id 'maven-publish'
+	id 'java'
+	id 'maven-publish'
+	id "com.diffplug.gradle.spotless" version "3.26.1"
 }
 
 repositories {
-    // Use jcenter for resolving your dependencies.
-    // You can declare any Maven/Ivy/file repository here.
-    jcenter()
+	// Use jcenter for resolving your dependencies.
+	// You can declare any Maven/Ivy/file repository here.
+	mavenLocal()
+	jcenter()
 }
 
 configurations {
-    // for putting Error Prone javac in bootclasspath for running tests
-    errorproneJavac
+	// for putting Error Prone javac in bootclasspath for running tests
+	errorproneJavac
 }
 
 ext.versions = [
-        checkerFramework: "3.1.1",
+		checkerFramework: "3.1.1",
 ]
 
 
@@ -23,50 +25,121 @@ sourceCompatibility = 1.8
 def checkerframework_local = false  // Set this variable to [true] while using local version of checker framework.
 
 dependencies {
-    // This dependency is found on compile classpath of this component and consumers.
-    if (checkerframework_local) {
-        implementation files('${CHECKERFRAMEWORK}/checker/dist/checker-qual.jar')
-        implementation files('${CHECKERFRAMEWORK}/checker/dist/checker.jar')
-        implementation files('${CHECKERFRAMEWORK}/checker/dist/jdk8.jar')
-    }
-    else {
-        implementation "org.checkerframework:checker:${versions.checkerFramework}"
-    }
+	// This dependency is found on compile classpath of this component and consumers.
+	if (checkerframework_local) {
+		implementation files('${CHECKERFRAMEWORK}/checker/dist/checker-qual.jar')
+		implementation files('${CHECKERFRAMEWORK}/checker/dist/checker.jar')
+		implementation files('${CHECKERFRAMEWORK}/checker/dist/jdk8.jar')
+	}
+	else {
+		implementation "org.checkerframework:checker:${versions.checkerFramework}"
+	}
 
-    compileOnly "com.google.errorprone:javac:9+181-r4173-1"
+	compileOnly "com.google.errorprone:javac:9+181-r4173-1"
 
-    // Testing
-    testImplementation 'junit:junit:4.13'
-    testCompile "org.checkerframework:framework-test:${versions.checkerFramework}"
+	// Testing
+	testImplementation 'junit:junit:4.13'
+	testCompile "org.checkerframework:framework-test:${versions.checkerFramework}"
 
-    errorproneJavac "com.google.errorprone:javac:9+181-r4173-1"
+	errorproneJavac "com.google.errorprone:javac:9+181-r4173-1"
+}
+
+sourceSets {
+	main {
+		java {
+			srcDirs = ["src/main/java"]
+		}
+
+		resources {
+			srcDirs = ["src/main/java"]
+			exclude "**/*.java"
+		}
+	}
+	test {
+		java {
+			srcDirs = ["src/test/java"]
+		}
+	}
 }
 
 tasks.withType(JavaCompile).all {
-    options.compilerArgs.add("-Xlint:all")
+	options.compilerArgs.add("-Xlint:all")
+}
+
+spotless {
+	java {
+		target "src/**/*.java"
+		googleJavaFormat().aosp()
+		removeUnusedImports()
+	}
+	format "misc", {
+		target "**/*.gradle", "**/*.md", "**/.gitignore"
+		trimTrailingWhitespace()
+		indentWithTabs()
+		endWithNewline()
+	}
 }
 
 // Add `mavenLocal()` in `repositories`, then run `./gradlew publishToMavenLocal`
 // to publish your checker to your local Maven repository.
 publishing {
-    publications {
-        maven(MavenPublication) {
-            groupId = 'org.checkerframework'
-            artifactId = 'config-checker'
-            version = '0.1-SNAPSHOT'
+	publications {
+		maven(MavenPublication) {
+			groupId = 'org.checkerframework'
+			artifactId = 'config-checker'
+			version = '0.1-SNAPSHOT'
 
-            from components.java
-        }
-    }
+			from components.java
+		}
+	}
 }
 
 test {
-    inputs.files("tests/config")
-    if (!JavaVersion.current().java9Compatible) {
-        jvmArgs "-Xbootclasspath/p:${configurations.errorproneJavac.asPath}"
-    }
+	inputs.files("tests/config")
+	if (!JavaVersion.current().java9Compatible) {
+		jvmArgs "-Xbootclasspath/p:${configurations.errorproneJavac.asPath}"
+	}
+}
+
+test.dependsOn(":assemble")
+assemble.dependsOn(":clean", ":spotlessApply")
+
+afterEvaluate {
+	// Configure JUnit tests
+	tasks.withType(Test) {
+		testLogging {
+			// Always run the tests
+			outputs.upToDateWhen { false }
+			// The following prints out each time a test is passed.
+			events "passed", "skipped", "failed", "standardOut", "standardError"
+			// Show the found unexpected diagnostics and expected diagnostics not found.
+			exceptionFormat "full"
+			showExceptions true
+			showCauses true
+			showStackTraces true
+			showStandardStreams true
+		}
+		// After each test, print a summary.
+		afterSuite { desc, result ->
+			if (desc.getClassName() != null) {
+				long mils = result.getEndTime() - result.getStartTime()
+				double seconds = mils / 1000.0
+				println()
+				println "Testsuite: ${desc.getClassName()}\n" +
+						"Tests run: ${result.testCount}, " +
+						"Failures: ${result.failedTestCount}, " +
+						"Skipped: ${result.skippedTestCount}, " +
+						"Time elapsed: ${seconds} sec"
+			}
+		}
+	}
 }
 
 clean.doFirst {
-    delete "${rootDir}/tests/build/"
+	delete "${rootDir}/tests/build/"
+}
+
+test.doLast {
+	delete "${rootDir}/tests/build/",
+			fileTree("tests/") { include "**/*.class" }
 }
