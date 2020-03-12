@@ -10,4 +10,4 @@ build
 *~
 
 # checker-qual
-config-checker-qual/src
+configfile-checker-qual/src
