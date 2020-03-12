@@ -1,4 +1,4 @@
-package org.checkerframework.checker.config.qual;
+package org.checkerframework.checker.configfile.qual;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -8,8 +8,8 @@ import org.checkerframework.framework.qual.SubtypeOf;
 import org.checkerframework.framework.qual.TargetLocations;
 import org.checkerframework.framework.qual.TypeUseLocation;
 
-@SubtypeOf({ConfigUnknown.class})
+@SubtypeOf({Config.class})
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE_USE, ElementType.TYPE_PARAMETER})
 @TargetLocations({TypeUseLocation.EXPLICIT_LOWER_BOUND, TypeUseLocation.EXPLICIT_UPPER_BOUND})
-public @interface Config {}
+public @interface ConfigBottom {}

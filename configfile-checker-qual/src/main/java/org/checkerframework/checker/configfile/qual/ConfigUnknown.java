@@ -1,4 +1,4 @@
-package org.checkerframework.checker.config.qual;
+package org.checkerframework.checker.configfile.qual;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

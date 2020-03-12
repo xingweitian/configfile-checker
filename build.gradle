@@ -86,7 +86,7 @@ publishing {
 	publications {
 		maven(MavenPublication) {
 			groupId = 'org.checkerframework'
-			artifactId = 'config-checker'
+			artifactId = 'configfile-checker'
 			version = '0.1-SNAPSHOT'
 
 			from components.java
@@ -95,7 +95,7 @@ publishing {
 }
 
 test {
-	inputs.files("tests/config")
+	inputs.files("tests/configfile")
 	if (!JavaVersion.current().java9Compatible) {
 		jvmArgs "-Xbootclasspath/p:${configurations.errorproneJavac.asPath}"
 	}
