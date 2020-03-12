@@ -8,8 +8,10 @@ import org.checkerframework.framework.qual.SubtypeOf;
 import org.checkerframework.framework.qual.TargetLocations;
 import org.checkerframework.framework.qual.TypeUseLocation;
 
-@SubtypeOf({Config.class})
+@SubtypeOf({ConfigFileUnknown.class})
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE_USE, ElementType.TYPE_PARAMETER})
 @TargetLocations({TypeUseLocation.EXPLICIT_LOWER_BOUND, TypeUseLocation.EXPLICIT_UPPER_BOUND})
-public @interface ConfigBottom {}
+public @interface ConfigFile {
+    String value() default "";
+}
