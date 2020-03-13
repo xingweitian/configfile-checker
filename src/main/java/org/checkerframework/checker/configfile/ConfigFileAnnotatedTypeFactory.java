@@ -5,6 +5,8 @@ import com.sun.source.tree.MethodInvocationTree;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.lang.annotation.Annotation;
+import java.util.List;
 import java.util.Properties;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.ExecutableElement;
@@ -26,6 +28,7 @@ import org.checkerframework.framework.util.GraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
 import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
+import org.checkerframework.javacutil.BugInCF;
 import org.checkerframework.javacutil.TreeUtils;
 
 public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
@@ -43,7 +46,10 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
 
     private final ExecutableElement propertiesLoad =
             TreeUtils.getMethod(
-                    java.util.Properties.class.getName(), "load", processingEnv, "InputStream");
+                    java.util.Properties.class.getName(),
+                    "load",
+                    processingEnv,
+                    "java.io.InputStream");
 
     private final ExecutableElement getProperty =
             TreeUtils.getMethod(
@@ -81,16 +87,16 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
                     && AnnotationUtils.areSame(superAnno, CONFIGFILE)) {
                 return compareConfigFileTypeValue(subAnno, superAnno);
             } else {
-                return false;
+                throw new BugInCF("We should never reach here.");
             }
         }
 
         private boolean compareConfigFileTypeValue(
                 AnnotationMirror subAnno, AnnotationMirror superAnno) {
             String subAnnoTypeValue =
-                    AnnotationUtils.getElementValue(subAnno, "value", String.class, true);
+                    AnnotationUtils.getElementValue(subAnno, "value", String.class, false);
             String superAnnoTypeValue =
-                    AnnotationUtils.getElementValue(superAnno, "value", String.class, true);
+                    AnnotationUtils.getElementValue(superAnno, "value", String.class, false);
             return superAnnoTypeValue.equals(subAnnoTypeValue);
         }
     }
@@ -124,41 +130,31 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
                 if (stringValAnnoMirror == null) {
                     return super.visitMethodInvocation(node, annotatedTypeMirror);
                 }
-                fileName =
-                        AnnotationUtils.getElementValueArray(
-                                        stringValAnnoMirror, "value", String.class, true)
-                                .get(0);
-                if (!fileName.equals("")) {
-                    configFileAnnoMirror = createConfigFileAnnotation(fileName);
+                fileName = getValueFromStringValAnnoMirror(stringValAnnoMirror);
+                if (fileName != null) {
+                    configFileAnnoMirror = createAnnotation(fileName, ConfigFile.class);
                     annotatedTypeMirror.replaceAnnotation(configFileAnnoMirror);
                 }
             } else if (TreeUtils.isMethodInvocation(node, propertiesLoad, processingEnv)
                     && configFileAnnoMirror != null) {
-                fileName =
-                        AnnotationUtils.getElementValue(
-                                configFileAnnoMirror, "value", String.class, true);
-                if (!fileName.equals("")) {
+                fileName = getValueFromConfigFileAnnoMirror(configFileAnnoMirror);
+                if (fileName != null) {
                     AnnotatedTypeMirror receiverATM = atypeFactory.getReceiverType(node);
-                    configFileAnnoMirror = createConfigFileAnnotation(fileName);
+                    configFileAnnoMirror = createAnnotation(fileName, ConfigFile.class);
                     receiverATM.replaceAnnotation(configFileAnnoMirror);
                 }
             } else if (TreeUtils.isMethodInvocation(node, getProperty, processingEnv)) {
                 AnnotatedTypeMirror receiverATM = atypeFactory.getReceiverType(node);
                 configFileAnnoMirror = receiverATM.getAnnotation(ConfigFile.class);
                 if (configFileAnnoMirror != null && stringValAnnoMirror != null) {
-                    fileName =
-                            AnnotationUtils.getElementValue(
-                                    configFileAnnoMirror, "value", String.class, true);
-                    String argValue =
-                            AnnotationUtils.getElementValueArray(
-                                            stringValAnnoMirror, "value", String.class, true)
-                                    .get(0);
-                    String propertyValue = readPropertyFromFile(fileName, argValue);
-                    if (propertyValue != null) {
-                        AnnotationBuilder builder =
-                                new AnnotationBuilder(processingEnv, StringVal.class);
-                        builder.setValue("value", propertyValue);
-                        annotatedTypeMirror.replaceAnnotation(builder.build());
+                    fileName = getValueFromConfigFileAnnoMirror(configFileAnnoMirror);
+                    if (fileName != null) {
+                        String argValue = getValueFromStringValAnnoMirror(stringValAnnoMirror);
+                        String propertyValue = readPropertyFromFile(fileName, argValue);
+                        if (propertyValue != null) {
+                            annotatedTypeMirror.replaceAnnotation(
+                                    createAnnotation(fileName, StringVal.class));
+                        }
                     }
                 }
             }
@@ -209,9 +205,24 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
         return getTypeFactoryOfSubchecker(ValueChecker.class);
     }
 
-    private AnnotationMirror createConfigFileAnnotation(String fileName) {
-        AnnotationBuilder builder = new AnnotationBuilder(processingEnv, ConfigFile.class);
-        builder.setValue("value", fileName);
+    private AnnotationMirror createAnnotation(String value, Class<? extends Annotation> className) {
+        AnnotationBuilder builder = new AnnotationBuilder(processingEnv, className);
+        builder.setValue("value", value);
         return builder.build();
+    }
+
+    private String getValueFromStringValAnnoMirror(AnnotationMirror stringValAnnoMirror) {
+        List<String> values =
+                AnnotationUtils.getElementValueArray(
+                        stringValAnnoMirror, "value", String.class, true);
+        if (!values.isEmpty()) {
+            return values.get(0);
+        } else {
+            return null;
+        }
+    }
+
+    private String getValueFromConfigFileAnnoMirror(AnnotationMirror configFileAnnoMirror) {
+        return AnnotationUtils.getElementValue(configFileAnnoMirror, "value", String.class, false);
     }
 }
