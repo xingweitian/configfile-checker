@@ -1,1 +1,1 @@
-# Config Checker
+# config-file-checker
