@@ -27,6 +27,6 @@ public class ConfigFileTest extends CheckerFrameworkPerDirectoryTest {
 
     @Parameters
     public static String[] getTestDirs() {
-        return new String[] {"configfile-file"};
+        return new String[] {"configfile"};
     }
 }

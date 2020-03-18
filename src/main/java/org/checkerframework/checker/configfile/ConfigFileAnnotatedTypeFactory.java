@@ -13,6 +13,7 @@ import javax.lang.model.element.ExecutableElement;
 import javax.tools.Diagnostic.Kind;
 import org.checkerframework.checker.configfile.qual.ConfigFile;
 import org.checkerframework.checker.configfile.qual.ConfigFileBottom;
+import org.checkerframework.checker.configfile.qual.ConfigFilePropertyValue;
 import org.checkerframework.checker.configfile.qual.ConfigFileUnknown;
 import org.checkerframework.common.basetype.BaseAnnotatedTypeFactory;
 import org.checkerframework.common.basetype.BaseTypeChecker;
@@ -28,28 +29,13 @@ import org.checkerframework.framework.util.GraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
 import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
-import org.checkerframework.javacutil.BugInCF;
 import org.checkerframework.javacutil.TreeUtils;
 
 public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
 
-    private final AnnotationMirror CONFIGFILE =
-            AnnotationBuilder.fromClass(elements, ConfigFile.class);
-    private final AnnotationMirror CONFIGFILEUNKNOWN =
-            AnnotationBuilder.fromClass(elements, ConfigFileUnknown.class);
-    private final AnnotationMirror CONFIGFILEBOTTOM =
-            AnnotationBuilder.fromClass(elements, ConfigFileBottom.class);
-
     private final ExecutableElement getResourceAsStream =
             TreeUtils.getMethod(
                     java.lang.ClassLoader.class.getName(), "getResourceAsStream", 1, processingEnv);
-
-    private final ExecutableElement propertiesLoad =
-            TreeUtils.getMethod(
-                    java.util.Properties.class.getName(),
-                    "load",
-                    processingEnv,
-                    "java.io.InputStream");
 
     private final ExecutableElement getProperty =
             TreeUtils.getMethod(
@@ -66,10 +52,11 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
 
     @Override
     public QualifierHierarchy createQualifierHierarchy(MultiGraphFactory factory) {
-        return new ConfigFileQualifierHierarchy(factory, CONFIGFILEBOTTOM);
+        return new ConfigFileQualifierHierarchy(
+                factory, AnnotationBuilder.fromClass(elements, ConfigFileBottom.class));
     }
 
-    private class ConfigFileQualifierHierarchy extends GraphQualifierHierarchy {
+    private static class ConfigFileQualifierHierarchy extends GraphQualifierHierarchy {
 
         public ConfigFileQualifierHierarchy(MultiGraphFactory factory, AnnotationMirror bottom) {
             super(factory, bottom);
@@ -77,27 +64,29 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
 
         @Override
         public boolean isSubtype(AnnotationMirror subAnno, AnnotationMirror superAnno) {
-            if (AnnotationUtils.areSame(subAnno, CONFIGFILEBOTTOM)
-                    || AnnotationUtils.areSame(superAnno, CONFIGFILEUNKNOWN)) {
+            if (AnnotationUtils.areSameByClass(subAnno, ConfigFileBottom.class)
+                    || AnnotationUtils.areSameByClass(superAnno, ConfigFileUnknown.class)) {
                 return true;
-            } else if (AnnotationUtils.areSame(subAnno, CONFIGFILEUNKNOWN)
-                    || AnnotationUtils.areSame(superAnno, CONFIGFILEBOTTOM)) {
+            } else if (AnnotationUtils.areSameByClass(subAnno, ConfigFileUnknown.class)
+                    || AnnotationUtils.areSameByClass(superAnno, ConfigFileBottom.class)) {
                 return false;
-            } else if (AnnotationUtils.areSame(subAnno, CONFIGFILE)
-                    && AnnotationUtils.areSame(superAnno, CONFIGFILE)) {
-                return compareConfigFileTypeValue(subAnno, superAnno);
+            } else if (AnnotationUtils.areSameByClass(subAnno, ConfigFile.class)
+                    && AnnotationUtils.areSameByClass(superAnno, ConfigFile.class)) {
+                return compareElementValue(subAnno, superAnno);
+            } else if (AnnotationUtils.areSameByClass(subAnno, ConfigFilePropertyValue.class)
+                    && AnnotationUtils.areSameByClass(superAnno, ConfigFilePropertyValue.class)) {
+                return compareElementValue(subAnno, superAnno);
             } else {
-                throw new BugInCF("We should never reach here.");
+                return false;
             }
         }
 
-        private boolean compareConfigFileTypeValue(
-                AnnotationMirror subAnno, AnnotationMirror superAnno) {
-            String subAnnoTypeValue =
+        private boolean compareElementValue(AnnotationMirror subAnno, AnnotationMirror superAnno) {
+            String subAnnoElementValue =
                     AnnotationUtils.getElementValue(subAnno, "value", String.class, false);
-            String superAnnoTypeValue =
+            String superAnnoElementValue =
                     AnnotationUtils.getElementValue(superAnno, "value", String.class, false);
-            return superAnnoTypeValue.equals(subAnnoTypeValue);
+            return superAnnoElementValue.equals(subAnnoElementValue);
         }
     }
 
@@ -116,44 +105,40 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
         @Override
         public Void visitMethodInvocation(
                 MethodInvocationTree node, AnnotatedTypeMirror annotatedTypeMirror) {
-            String fileName;
-
-            AnnotatedTypeMirror configFileATM = atypeFactory.getAnnotatedType(node);
-            AnnotationMirror configFileAnnoMirror = configFileATM.getAnnotation(ConfigFile.class);
-
-            ExpressionTree arg0 = node.getArguments().get(0);
-            ValueAnnotatedTypeFactory valueCheckerATF = getValueAnnotatedTypeFactory();
-            AnnotatedTypeMirror valueATM = valueCheckerATF.getAnnotatedType(arg0);
-            AnnotationMirror stringValAnnoMirror = valueATM.getAnnotation(StringVal.class);
 
             if (TreeUtils.isMethodInvocation(node, getResourceAsStream, processingEnv)) {
+
+                AnnotationMirror stringValAnnoMirror = getStringValAnnoMirrorOfArgument(node, 0);
+
                 if (stringValAnnoMirror == null) {
                     return super.visitMethodInvocation(node, annotatedTypeMirror);
                 }
-                fileName = getValueFromStringValAnnoMirror(stringValAnnoMirror);
-                if (fileName != null) {
-                    configFileAnnoMirror = createAnnotation(fileName, ConfigFile.class);
-                    annotatedTypeMirror.replaceAnnotation(configFileAnnoMirror);
+
+                String propFile = getValueFromStringValAnnoMirror(stringValAnnoMirror);
+
+                if (propFile != null) {
+                    annotatedTypeMirror.replaceAnnotation(
+                            createAnnotation(propFile, ConfigFile.class));
                 }
-            } else if (TreeUtils.isMethodInvocation(node, propertiesLoad, processingEnv)
-                    && configFileAnnoMirror != null) {
-                fileName = getValueFromConfigFileAnnoMirror(configFileAnnoMirror);
-                if (fileName != null) {
-                    AnnotatedTypeMirror receiverATM = atypeFactory.getReceiverType(node);
-                    configFileAnnoMirror = createAnnotation(fileName, ConfigFile.class);
-                    receiverATM.replaceAnnotation(configFileAnnoMirror);
-                }
+
             } else if (TreeUtils.isMethodInvocation(node, getProperty, processingEnv)) {
-                AnnotatedTypeMirror receiverATM = atypeFactory.getReceiverType(node);
-                configFileAnnoMirror = receiverATM.getAnnotation(ConfigFile.class);
+
+                AnnotationMirror configFileAnnoMirror =
+                        atypeFactory.getReceiverType(node).getAnnotation(ConfigFile.class);
+                AnnotationMirror stringValAnnoMirror = getStringValAnnoMirrorOfArgument(node, 0);
+
                 if (configFileAnnoMirror != null && stringValAnnoMirror != null) {
-                    fileName = getValueFromConfigFileAnnoMirror(configFileAnnoMirror);
-                    if (fileName != null) {
+
+                    String propFile = getValueFromConfigFileAnnoMirror(configFileAnnoMirror);
+
+                    if (propFile != null) {
+
                         String argValue = getValueFromStringValAnnoMirror(stringValAnnoMirror);
-                        String propertyValue = readPropertyFromFile(fileName, argValue);
+                        String propertyValue = readPropertyFromFile(propFile, argValue);
+
                         if (propertyValue != null) {
                             annotatedTypeMirror.replaceAnnotation(
-                                    createAnnotation(fileName, StringVal.class));
+                                    createAnnotation(propertyValue, ConfigFilePropertyValue.class));
                         }
                     }
                 }
@@ -187,14 +172,14 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
 
                 if (in == null) {
                     checker.message(Kind.WARNING, "Couldn't find the properties file: " + fileName);
-                    return res;
+                    return null;
                 }
 
                 prop.load(in);
                 res = prop.getProperty(argValue);
             } catch (Exception e) {
                 checker.message(
-                        Kind.WARNING, "Exception in PropertyKeyChecker.keysOfPropertyFile: " + e);
+                        Kind.WARNING, "Exception in ConfigFileChecker.readPropertyFromFile: " + e);
                 e.printStackTrace();
             }
             return res;
@@ -205,7 +190,8 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
         return getTypeFactoryOfSubchecker(ValueChecker.class);
     }
 
-    private AnnotationMirror createAnnotation(String value, Class<? extends Annotation> className) {
+    protected AnnotationMirror createAnnotation(
+            String value, Class<? extends Annotation> className) {
         AnnotationBuilder builder = new AnnotationBuilder(processingEnv, className);
         builder.setValue("value", value);
         return builder.build();
@@ -222,7 +208,15 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
         }
     }
 
-    private String getValueFromConfigFileAnnoMirror(AnnotationMirror configFileAnnoMirror) {
+    protected static String getValueFromConfigFileAnnoMirror(
+            AnnotationMirror configFileAnnoMirror) {
         return AnnotationUtils.getElementValue(configFileAnnoMirror, "value", String.class, false);
+    }
+
+    private AnnotationMirror getStringValAnnoMirrorOfArgument(
+            MethodInvocationTree node, int position) {
+        ExpressionTree arg = node.getArguments().get(position);
+        AnnotatedTypeMirror valueATM = getValueAnnotatedTypeFactory().getAnnotatedType(arg);
+        return valueATM.getAnnotation(StringVal.class);
     }
 }
