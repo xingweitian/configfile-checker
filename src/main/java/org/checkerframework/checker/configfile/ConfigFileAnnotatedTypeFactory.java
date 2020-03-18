@@ -133,12 +133,44 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
 
                     if (propFile != null) {
 
-                        String argValue = getValueFromStringValAnnoMirror(stringValAnnoMirror);
-                        String propertyValue = readPropertyFromFile(propFile, argValue);
+                        String propKey = getValueFromStringValAnnoMirror(stringValAnnoMirror);
+                        String propValue = readValueFromPropertyFile(propFile, propKey, null);
 
-                        if (propertyValue != null) {
+                        if (propValue != null) {
                             annotatedTypeMirror.replaceAnnotation(
-                                    createAnnotation(propertyValue, ConfigFilePropertyValue.class));
+                                    createAnnotation(propValue, ConfigFilePropertyValue.class));
+                        }
+                    }
+                }
+            } else if (TreeUtils.isMethodInvocation(
+                    node, getPropertyWithDefaultValue, processingEnv)) {
+                AnnotationMirror configFileAnnoMirror =
+                        atypeFactory.getReceiverType(node).getAnnotation(ConfigFile.class);
+                AnnotationMirror stringValAnnoMirrorArg0 =
+                        getStringValAnnoMirrorOfArgument(node, 0);
+                AnnotationMirror stringValAnnoMirrorArg1 =
+                        getStringValAnnoMirrorOfArgument(node, 1);
+
+                if (configFileAnnoMirror != null && stringValAnnoMirrorArg0 != null) {
+
+                    String propFile = getValueFromConfigFileAnnoMirror(configFileAnnoMirror);
+
+                    if (propFile != null) {
+
+                        String propKey = getValueFromStringValAnnoMirror(stringValAnnoMirrorArg0);
+
+                        String defaultValue = null;
+
+                        if (stringValAnnoMirrorArg1 != null) {
+                            defaultValue = getValueFromStringValAnnoMirror(stringValAnnoMirrorArg1);
+                        }
+
+                        String propValue =
+                                readValueFromPropertyFile(propFile, propKey, defaultValue);
+
+                        if (propValue != null) {
+                            annotatedTypeMirror.replaceAnnotation(
+                                    createAnnotation(propValue, ConfigFilePropertyValue.class));
                         }
                     }
                 }
@@ -146,7 +178,8 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
             return super.visitMethodInvocation(node, annotatedTypeMirror);
         }
 
-        private String readPropertyFromFile(String fileName, String argValue) {
+        private String readValueFromPropertyFile(
+                String fileName, String argValue, String defaultValue) {
             String res = null;
             try {
                 Properties prop = new Properties();
@@ -176,7 +209,12 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
                 }
 
                 prop.load(in);
-                res = prop.getProperty(argValue);
+
+                if (defaultValue == null) {
+                    res = prop.getProperty(argValue);
+                } else {
+                    res = prop.getProperty(argValue, defaultValue);
+                }
             } catch (Exception e) {
                 checker.message(
                         Kind.WARNING, "Exception in ConfigFileChecker.readPropertyFromFile: " + e);
