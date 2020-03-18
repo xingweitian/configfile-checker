@@ -98,8 +98,8 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
 
     private class ConfigFileTreeAnnotator extends TreeAnnotator {
 
-        public ConfigFileTreeAnnotator(AnnotatedTypeFactory atypefactory) {
-            super(atypefactory);
+        public ConfigFileTreeAnnotator(AnnotatedTypeFactory atypeFactory) {
+            super(atypeFactory);
         }
 
         @Override
