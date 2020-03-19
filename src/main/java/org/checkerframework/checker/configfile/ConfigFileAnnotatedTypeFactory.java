@@ -6,32 +6,47 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.ExecutableElement;
 import javax.tools.Diagnostic.Kind;
 import org.checkerframework.checker.configfile.qual.ConfigFile;
 import org.checkerframework.checker.configfile.qual.ConfigFileBottom;
-import org.checkerframework.checker.configfile.qual.ConfigFilePropertyValue;
 import org.checkerframework.checker.configfile.qual.ConfigFileUnknown;
-import org.checkerframework.common.basetype.BaseAnnotatedTypeFactory;
 import org.checkerframework.common.basetype.BaseTypeChecker;
 import org.checkerframework.common.value.ValueAnnotatedTypeFactory;
-import org.checkerframework.common.value.ValueChecker;
+import org.checkerframework.common.value.qual.ArrayLen;
+import org.checkerframework.common.value.qual.ArrayLenRange;
+import org.checkerframework.common.value.qual.BoolVal;
+import org.checkerframework.common.value.qual.BottomVal;
+import org.checkerframework.common.value.qual.DoubleVal;
+import org.checkerframework.common.value.qual.IntRange;
+import org.checkerframework.common.value.qual.IntRangeFromGTENegativeOne;
+import org.checkerframework.common.value.qual.IntRangeFromNonNegative;
+import org.checkerframework.common.value.qual.IntRangeFromPositive;
+import org.checkerframework.common.value.qual.IntVal;
+import org.checkerframework.common.value.qual.PolyValue;
 import org.checkerframework.common.value.qual.StringVal;
-import org.checkerframework.framework.type.AnnotatedTypeFactory;
+import org.checkerframework.common.value.qual.UnknownVal;
+import org.checkerframework.framework.flow.CFAbstractAnalysis;
+import org.checkerframework.framework.flow.CFAnalysis;
+import org.checkerframework.framework.flow.CFStore;
+import org.checkerframework.framework.flow.CFTransfer;
+import org.checkerframework.framework.flow.CFValue;
 import org.checkerframework.framework.type.AnnotatedTypeMirror;
 import org.checkerframework.framework.type.QualifierHierarchy;
 import org.checkerframework.framework.type.treeannotator.ListTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.TreeAnnotator;
-import org.checkerframework.framework.util.GraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
 import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
+import org.checkerframework.javacutil.BugInCF;
 import org.checkerframework.javacutil.TreeUtils;
 
-public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
+public class ConfigFileAnnotatedTypeFactory extends ValueAnnotatedTypeFactory {
 
     private final ExecutableElement getResourceAsStream =
             TreeUtils.getMethod(
@@ -51,34 +66,87 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
     }
 
     @Override
-    public QualifierHierarchy createQualifierHierarchy(MultiGraphFactory factory) {
-        return new ConfigFileQualifierHierarchy(
-                factory, AnnotationBuilder.fromClass(elements, ConfigFileBottom.class));
+    protected Set<Class<? extends Annotation>> createSupportedTypeQualifiers() {
+        Set<Class<? extends Annotation>> supportedTypeQualifiers =
+                super.createSupportedTypeQualifiers();
+        Collections.addAll(
+                supportedTypeQualifiers,
+                ConfigFile.class,
+                ConfigFileUnknown.class,
+                ConfigFileBottom.class);
+        return supportedTypeQualifiers;
     }
 
-    private static class ConfigFileQualifierHierarchy extends GraphQualifierHierarchy {
+    @Override
+    public QualifierHierarchy createQualifierHierarchy(MultiGraphFactory factory) {
+        return new ConfigFileQualifierHierarchy(factory);
+    }
 
-        public ConfigFileQualifierHierarchy(MultiGraphFactory factory, AnnotationMirror bottom) {
-            super(factory, bottom);
+    @Override
+    public CFTransfer createFlowTransferFunction(
+            CFAbstractAnalysis<CFValue, CFStore, CFTransfer> analysis) {
+        return new ConfigFileTransfer((CFAnalysis) analysis);
+    }
+
+    private class ConfigFileQualifierHierarchy extends ValueQualifierHierarchy {
+
+        public ConfigFileQualifierHierarchy(MultiGraphFactory factory) {
+            super(factory);
         }
 
         @Override
         public boolean isSubtype(AnnotationMirror subAnno, AnnotationMirror superAnno) {
-            if (AnnotationUtils.areSameByClass(subAnno, ConfigFileBottom.class)
-                    || AnnotationUtils.areSameByClass(superAnno, ConfigFileUnknown.class)) {
-                return true;
-            } else if (AnnotationUtils.areSameByClass(subAnno, ConfigFileUnknown.class)
-                    || AnnotationUtils.areSameByClass(superAnno, ConfigFileBottom.class)) {
-                return false;
-            } else if (AnnotationUtils.areSameByClass(subAnno, ConfigFile.class)
-                    && AnnotationUtils.areSameByClass(superAnno, ConfigFile.class)) {
-                return compareElementValue(subAnno, superAnno);
-            } else if (AnnotationUtils.areSameByClass(subAnno, ConfigFilePropertyValue.class)
-                    && AnnotationUtils.areSameByClass(superAnno, ConfigFilePropertyValue.class)) {
-                return compareElementValue(subAnno, superAnno);
-            } else {
-                return false;
+            if ((AnnotationUtils.areSameByClass(subAnno, ArrayLen.class)
+                            || AnnotationUtils.areSameByClass(subAnno, ArrayLenRange.class)
+                            || AnnotationUtils.areSameByClass(subAnno, IntVal.class)
+                            || AnnotationUtils.areSameByClass(subAnno, IntRange.class)
+                            || AnnotationUtils.areSameByClass(subAnno, BoolVal.class)
+                            || AnnotationUtils.areSameByClass(subAnno, StringVal.class)
+                            || AnnotationUtils.areSameByClass(subAnno, DoubleVal.class)
+                            || AnnotationUtils.areSameByClass(subAnno, BottomVal.class)
+                            || AnnotationUtils.areSameByClass(subAnno, UnknownVal.class)
+                            || AnnotationUtils.areSameByClass(subAnno, IntRangeFromPositive.class)
+                            || AnnotationUtils.areSameByClass(
+                                    subAnno, IntRangeFromNonNegative.class)
+                            || AnnotationUtils.areSameByClass(
+                                    subAnno, IntRangeFromGTENegativeOne.class)
+                            || AnnotationUtils.areSameByClass(subAnno, PolyValue.class))
+                    && (AnnotationUtils.areSameByClass(superAnno, ArrayLen.class)
+                            || AnnotationUtils.areSameByClass(superAnno, ArrayLenRange.class)
+                            || AnnotationUtils.areSameByClass(superAnno, IntVal.class)
+                            || AnnotationUtils.areSameByClass(superAnno, IntRange.class)
+                            || AnnotationUtils.areSameByClass(superAnno, BoolVal.class)
+                            || AnnotationUtils.areSameByClass(superAnno, StringVal.class)
+                            || AnnotationUtils.areSameByClass(superAnno, DoubleVal.class)
+                            || AnnotationUtils.areSameByClass(superAnno, BottomVal.class)
+                            || AnnotationUtils.areSameByClass(superAnno, UnknownVal.class)
+                            || AnnotationUtils.areSameByClass(superAnno, IntRangeFromPositive.class)
+                            || AnnotationUtils.areSameByClass(
+                                    superAnno, IntRangeFromNonNegative.class)
+                            || AnnotationUtils.areSameByClass(
+                                    superAnno, IntRangeFromGTENegativeOne.class)
+                            || AnnotationUtils.areSameByClass(superAnno, PolyValue.class))) {
+                return super.isSubtype(subAnno, superAnno);
+            } else if ((AnnotationUtils.areSameByClass(subAnno, ConfigFile.class)
+                            || AnnotationUtils.areSameByClass(subAnno, ConfigFileUnknown.class)
+                            || AnnotationUtils.areSameByClass(subAnno, ConfigFileBottom.class))
+                    && (AnnotationUtils.areSameByClass(superAnno, ConfigFile.class)
+                            || AnnotationUtils.areSameByClass(superAnno, ConfigFileUnknown.class)
+                            || AnnotationUtils.areSameByClass(superAnno, ConfigFileBottom.class))) {
+                if (AnnotationUtils.areSameByClass(subAnno, ConfigFileBottom.class)
+                        || AnnotationUtils.areSameByClass(superAnno, ConfigFileUnknown.class)) {
+                    return true;
+                } else if (AnnotationUtils.areSameByClass(subAnno, ConfigFileUnknown.class)
+                        || AnnotationUtils.areSameByClass(superAnno, ConfigFileBottom.class)) {
+                    return false;
+                } else if (AnnotationUtils.areSameByClass(subAnno, ConfigFile.class)
+                        && AnnotationUtils.areSameByClass(superAnno, ConfigFile.class)) {
+                    return compareElementValue(subAnno, superAnno);
+                } else {
+                    throw new BugInCF("We should never reach here.");
+                }
             }
+            return false;
         }
 
         private boolean compareElementValue(AnnotationMirror subAnno, AnnotationMirror superAnno) {
@@ -93,12 +161,12 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
     @Override
     protected TreeAnnotator createTreeAnnotator() {
         return new ListTreeAnnotator(
-                super.createTreeAnnotator(), new ConfigFileTreeAnnotator(this));
+                new ConfigFileTreeAnnotator(this), super.createTreeAnnotator());
     }
 
     private class ConfigFileTreeAnnotator extends TreeAnnotator {
 
-        public ConfigFileTreeAnnotator(AnnotatedTypeFactory atypeFactory) {
+        public ConfigFileTreeAnnotator(ConfigFileAnnotatedTypeFactory atypeFactory) {
             super(atypeFactory);
         }
 
@@ -137,8 +205,11 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
                         String propValue = readValueFromPropertyFile(propFile, propKey, null);
 
                         if (propValue != null) {
-                            annotatedTypeMirror.replaceAnnotation(
-                                    createAnnotation(propValue, ConfigFilePropertyValue.class));
+                            String[] value = {propValue};
+                            AnnotationBuilder builder =
+                                    new AnnotationBuilder(processingEnv, StringVal.class);
+                            builder.setValue("value", value);
+                            annotatedTypeMirror.replaceAnnotation(builder.build());
                         }
                     }
                 }
@@ -169,8 +240,11 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
                                 readValueFromPropertyFile(propFile, propKey, defaultValue);
 
                         if (propValue != null) {
-                            annotatedTypeMirror.replaceAnnotation(
-                                    createAnnotation(propValue, ConfigFilePropertyValue.class));
+                            String[] value = {propValue};
+                            AnnotationBuilder builder =
+                                    new AnnotationBuilder(processingEnv, StringVal.class);
+                            builder.setValue("value", value);
+                            annotatedTypeMirror.replaceAnnotation(builder.build());
                         }
                     }
                 }
@@ -224,10 +298,6 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
         }
     }
 
-    private ValueAnnotatedTypeFactory getValueAnnotatedTypeFactory() {
-        return getTypeFactoryOfSubchecker(ValueChecker.class);
-    }
-
     protected AnnotationMirror createAnnotation(
             String value, Class<? extends Annotation> className) {
         AnnotationBuilder builder = new AnnotationBuilder(processingEnv, className);
@@ -254,7 +324,6 @@ public class ConfigFileAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
     private AnnotationMirror getStringValAnnoMirrorOfArgument(
             MethodInvocationTree node, int position) {
         ExpressionTree arg = node.getArguments().get(position);
-        AnnotatedTypeMirror valueATM = getValueAnnotatedTypeFactory().getAnnotatedType(arg);
-        return valueATM.getAnnotation(StringVal.class);
+        return this.getAnnotatedType(arg).getAnnotation(StringVal.class);
     }
 }

@@ -1,7 +1,7 @@
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
-import org.checkerframework.checker.configfile.qual.ConfigFilePropertyValue;
+import org.checkerframework.common.value.qual.StringVal;
 
 class ConfigFileReadTest {
 
@@ -11,7 +11,7 @@ class ConfigFileReadTest {
         Properties prop = new Properties();
         InputStream inputStream = getClass().getClassLoader().getResourceAsStream(propFile);
         prop.load(inputStream);
-        @ConfigFilePropertyValue("http://www.example.com")
+        @StringVal("http://www.example.com")
         String url = prop.getProperty("URL");
     }
 
@@ -19,7 +19,7 @@ class ConfigFileReadTest {
         Properties prop = new Properties();
         InputStream inputStream = getClass().getClassLoader().getResourceAsStream(propFile);
         prop.load(inputStream);
-        @ConfigFilePropertyValue("localhost")
+        @StringVal("localhost")
         String host = prop.getProperty("HOST", "127.0.0.1");
     }
 
@@ -27,7 +27,7 @@ class ConfigFileReadTest {
         Properties prop = new Properties();
         InputStream inputStream = getClass().getClassLoader().getResourceAsStream(propFile);
         prop.load(inputStream);
-        @ConfigFilePropertyValue("default value")
+        @StringVal("default value")
         String host = prop.getProperty("NOSUCHKEY", "default value");
     }
 }

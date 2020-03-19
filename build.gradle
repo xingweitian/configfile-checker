@@ -22,14 +22,14 @@ ext.versions = [
 
 
 sourceCompatibility = 1.8
-def checkerframework_local = false  // Set this variable to [true] while using local version of checker framework.
+def checkerframework_local = true  // Set this variable to [true] while using local version of checker framework.
 
 dependencies {
 	// This dependency is found on compile classpath of this component and consumers.
 	if (checkerframework_local) {
-		implementation files('${CHECKERFRAMEWORK}/checker/dist/checker-qual.jar')
-		implementation files('${CHECKERFRAMEWORK}/checker/dist/checker.jar')
-		implementation files('${CHECKERFRAMEWORK}/checker/dist/jdk8.jar')
+		implementation files('../checker-framework/checker/dist/checker-qual.jar')
+		implementation files('../checker-framework/checker/dist/checker.jar')
+		implementation files('../checker-framework/checker/dist/jdk8.jar')
 	}
 	else {
 		implementation "org.checkerframework:checker:${versions.checkerFramework}"
