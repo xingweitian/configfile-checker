@@ -96,43 +96,10 @@ public class ConfigFileAnnotatedTypeFactory extends ValueAnnotatedTypeFactory {
 
         @Override
         public boolean isSubtype(AnnotationMirror subAnno, AnnotationMirror superAnno) {
-            if ((AnnotationUtils.areSameByClass(subAnno, ArrayLen.class)
-                            || AnnotationUtils.areSameByClass(subAnno, ArrayLenRange.class)
-                            || AnnotationUtils.areSameByClass(subAnno, IntVal.class)
-                            || AnnotationUtils.areSameByClass(subAnno, IntRange.class)
-                            || AnnotationUtils.areSameByClass(subAnno, BoolVal.class)
-                            || AnnotationUtils.areSameByClass(subAnno, StringVal.class)
-                            || AnnotationUtils.areSameByClass(subAnno, DoubleVal.class)
-                            || AnnotationUtils.areSameByClass(subAnno, BottomVal.class)
-                            || AnnotationUtils.areSameByClass(subAnno, UnknownVal.class)
-                            || AnnotationUtils.areSameByClass(subAnno, IntRangeFromPositive.class)
-                            || AnnotationUtils.areSameByClass(
-                                    subAnno, IntRangeFromNonNegative.class)
-                            || AnnotationUtils.areSameByClass(
-                                    subAnno, IntRangeFromGTENegativeOne.class)
-                            || AnnotationUtils.areSameByClass(subAnno, PolyValue.class))
-                    && (AnnotationUtils.areSameByClass(superAnno, ArrayLen.class)
-                            || AnnotationUtils.areSameByClass(superAnno, ArrayLenRange.class)
-                            || AnnotationUtils.areSameByClass(superAnno, IntVal.class)
-                            || AnnotationUtils.areSameByClass(superAnno, IntRange.class)
-                            || AnnotationUtils.areSameByClass(superAnno, BoolVal.class)
-                            || AnnotationUtils.areSameByClass(superAnno, StringVal.class)
-                            || AnnotationUtils.areSameByClass(superAnno, DoubleVal.class)
-                            || AnnotationUtils.areSameByClass(superAnno, BottomVal.class)
-                            || AnnotationUtils.areSameByClass(superAnno, UnknownVal.class)
-                            || AnnotationUtils.areSameByClass(superAnno, IntRangeFromPositive.class)
-                            || AnnotationUtils.areSameByClass(
-                                    superAnno, IntRangeFromNonNegative.class)
-                            || AnnotationUtils.areSameByClass(
-                                    superAnno, IntRangeFromGTENegativeOne.class)
-                            || AnnotationUtils.areSameByClass(superAnno, PolyValue.class))) {
+            if (inValueQualifierHierarchy(subAnno) && inValueQualifierHierarchy(superAnno)) {
                 return super.isSubtype(subAnno, superAnno);
-            } else if ((AnnotationUtils.areSameByClass(subAnno, ConfigFile.class)
-                            || AnnotationUtils.areSameByClass(subAnno, ConfigFileUnknown.class)
-                            || AnnotationUtils.areSameByClass(subAnno, ConfigFileBottom.class))
-                    && (AnnotationUtils.areSameByClass(superAnno, ConfigFile.class)
-                            || AnnotationUtils.areSameByClass(superAnno, ConfigFileUnknown.class)
-                            || AnnotationUtils.areSameByClass(superAnno, ConfigFileBottom.class))) {
+            } else if (inConfigFileQualifierHierarchy(subAnno)
+                    && inConfigFileQualifierHierarchy(superAnno)) {
                 if (AnnotationUtils.areSameByClass(subAnno, ConfigFileBottom.class)
                         || AnnotationUtils.areSameByClass(superAnno, ConfigFileUnknown.class)) {
                     return true;
@@ -155,6 +122,28 @@ public class ConfigFileAnnotatedTypeFactory extends ValueAnnotatedTypeFactory {
             String superAnnoElementValue =
                     AnnotationUtils.getElementValue(superAnno, "value", String.class, false);
             return superAnnoElementValue.equals(subAnnoElementValue);
+        }
+
+        private boolean inValueQualifierHierarchy(AnnotationMirror anno) {
+            return AnnotationUtils.areSameByClass(anno, ArrayLen.class)
+                    || AnnotationUtils.areSameByClass(anno, ArrayLenRange.class)
+                    || AnnotationUtils.areSameByClass(anno, IntVal.class)
+                    || AnnotationUtils.areSameByClass(anno, IntRange.class)
+                    || AnnotationUtils.areSameByClass(anno, BoolVal.class)
+                    || AnnotationUtils.areSameByClass(anno, StringVal.class)
+                    || AnnotationUtils.areSameByClass(anno, DoubleVal.class)
+                    || AnnotationUtils.areSameByClass(anno, BottomVal.class)
+                    || AnnotationUtils.areSameByClass(anno, UnknownVal.class)
+                    || AnnotationUtils.areSameByClass(anno, IntRangeFromPositive.class)
+                    || AnnotationUtils.areSameByClass(anno, IntRangeFromNonNegative.class)
+                    || AnnotationUtils.areSameByClass(anno, IntRangeFromGTENegativeOne.class)
+                    || AnnotationUtils.areSameByClass(anno, PolyValue.class);
+        }
+
+        private boolean inConfigFileQualifierHierarchy(AnnotationMirror anno) {
+            return AnnotationUtils.areSameByClass(anno, ConfigFile.class)
+                    || AnnotationUtils.areSameByClass(anno, ConfigFileUnknown.class)
+                    || AnnotationUtils.areSameByClass(anno, ConfigFileBottom.class);
         }
     }
 
@@ -185,8 +174,7 @@ public class ConfigFileAnnotatedTypeFactory extends ValueAnnotatedTypeFactory {
                 String propFile = getValueFromStringValAnnoMirror(stringValAnnoMirror);
 
                 if (propFile != null) {
-                    annotatedTypeMirror.replaceAnnotation(
-                            createAnnotation(propFile, ConfigFile.class));
+                    annotatedTypeMirror.replaceAnnotation(createConfigFileAnnoMirror(propFile));
                 }
 
             } else if (TreeUtils.isMethodInvocation(node, getProperty, processingEnv)) {
@@ -205,11 +193,8 @@ public class ConfigFileAnnotatedTypeFactory extends ValueAnnotatedTypeFactory {
                         String propValue = readValueFromPropertyFile(propFile, propKey, null);
 
                         if (propValue != null) {
-                            String[] value = {propValue};
-                            AnnotationBuilder builder =
-                                    new AnnotationBuilder(processingEnv, StringVal.class);
-                            builder.setValue("value", value);
-                            annotatedTypeMirror.replaceAnnotation(builder.build());
+                            annotatedTypeMirror.replaceAnnotation(
+                                    createStringValAnnoMirror(propValue));
                         }
                     }
                 }
@@ -240,11 +225,8 @@ public class ConfigFileAnnotatedTypeFactory extends ValueAnnotatedTypeFactory {
                                 readValueFromPropertyFile(propFile, propKey, defaultValue);
 
                         if (propValue != null) {
-                            String[] value = {propValue};
-                            AnnotationBuilder builder =
-                                    new AnnotationBuilder(processingEnv, StringVal.class);
-                            builder.setValue("value", value);
-                            annotatedTypeMirror.replaceAnnotation(builder.build());
+                            annotatedTypeMirror.replaceAnnotation(
+                                    createStringValAnnoMirror(propValue));
                         }
                     }
                 }
@@ -298,10 +280,16 @@ public class ConfigFileAnnotatedTypeFactory extends ValueAnnotatedTypeFactory {
         }
     }
 
-    protected AnnotationMirror createAnnotation(
-            String value, Class<? extends Annotation> className) {
-        AnnotationBuilder builder = new AnnotationBuilder(processingEnv, className);
+    protected AnnotationMirror createConfigFileAnnoMirror(String value) {
+        AnnotationBuilder builder = new AnnotationBuilder(processingEnv, ConfigFile.class);
         builder.setValue("value", value);
+        return builder.build();
+    }
+
+    private AnnotationMirror createStringValAnnoMirror(String value) {
+        List<String> valueList = Collections.singletonList(value);
+        AnnotationBuilder builder = new AnnotationBuilder(processingEnv, StringVal.class);
+        builder.setValue("value", valueList);
         return builder.build();
     }
 

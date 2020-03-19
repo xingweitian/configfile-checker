@@ -57,7 +57,7 @@ public class ConfigFileTransfer extends ValueTransfer {
 
                 Node receiver = n.getTarget().getReceiver();
                 Receiver receiverRec = FlowExpressions.internalReprOf(atypeFactory, receiver);
-                configFileAnnoMirror = atypeFactory.createAnnotation(propFile, ConfigFile.class);
+                configFileAnnoMirror = atypeFactory.createConfigFileAnnoMirror(propFile);
 
                 if (transferResult.containsTwoStores()) {
                     CFStore thenStore = transferResult.getThenStore();
