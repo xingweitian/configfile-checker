@@ -2,7 +2,7 @@
 
 configfile-checker can be used to detect the values in property files:
 
-```
+```java
 void a() throws IOException {
         Properties prop = new Properties();
         InputStream inputStream = getClass().getClassLoader().getResourceAsStream("a.property");
